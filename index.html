@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario de Perfumes en Vivo</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PapaParse para leer CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Archivo de estilos personalizado -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen p-6">
+
+    <div class="max-w-4xl mx-auto">
+        <!-- Encabezado -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-gray-900">Inventario de Perfumes en Vivo</h1>
+            <p class="text-gray-500 mt-1">Conectado directamente a tu Google Sheet</p>
+        </header>
+
+        <!-- Controles: Buscador y Botón de Recargar -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="w-full md:w-2/3">
+                    <input type="text" id="searchInput" placeholder="🔍 Buscar perfume por nombre..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm">
+                </div>
+                <div class="w-full md:w-auto flex items-center justify-between gap-3">
+                    <span id="statusIndicator" class="text-xs px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-medium">Sincronizando...</span>
+                    <button onclick="loadGoogleSheetData()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition-colors shadow-sm cursor-pointer">
+                        🔄 Actualizar Datos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabla de Inventario -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 text-gray-600 text-xs font-semibold uppercase tracking-wider">
+                            <th class="py-3 px-6">Perfume (Nombre)</th>
+                            <th class="py-3 px-6 text-center">Cantidad</th>
+                            <th class="py-3 px-6 text-center">Stock (Restantes)</th>
+                            <th class="py-3 px-6 text-right">Precio de Venta</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTableBody" class="divide-y divide-gray-200 text-sm">
+                        <tr><td colspan="4" class="text-center py-8 text-gray-400">Cargando inventario desde Google Sheets...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="text-center mt-6 text-xs text-gray-400">
+            Los cambios realizados en tu Google Sheet se reflejarán al hacer clic en "Actualizar Datos".
+        </div>
+    </div>
+
+    <!-- Archivo JavaScript principal -->
+    <script src="app.js"></script>
+</body>
+</html>
