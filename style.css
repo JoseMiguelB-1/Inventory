@@ -1,0 +1,9 @@
+/* Estilos generales y tipografía */
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Transiciones suaves para filas y elementos interactivos */
+tr {
+    transition: background-color 0.15s ease-in-out;
+}
