@@ -1,9 +1,8 @@
-// ID de tu Google Sheet y GID de la pestaña obtenidos de tu enlace
+// ID de tu Google Sheet / Excel en Drive
 const SPREADSHEET_ID = '1fP3PWiWY13KpIT62uLwh-DpW76Pc6t_y';
-const GID = '108359074';
 
-// URL de exportación a CSV de Google Sheets
-const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID}`;
+// URL de descarga directa compatible con archivos Excel subidos a Google Drive
+const excelUrl = `https://docs.google.com/uc?export=download&id=${SPREADSHEET_ID}`;
 
 let globalInventoryData = [];
 
@@ -17,45 +16,57 @@ function loadGoogleSheetData() {
     statusEl.textContent = "Conectando...";
     statusEl.className = "text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-medium";
 
-    // Proxy público para evitar bloqueos CORS del navegador al consultar Google Sheets
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(csvUrl)}`;
+    // Usamos un proxy CORS alternativo y seguro para descargar el binario del Excel
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(excelUrl)}`;
 
-    Papa.parse(proxyUrl, {
-        download: true,
-        header: false,
-        complete: function(results) {
-            processData(results.data);
+    fetch(proxyUrl)
+        .then(response => {
+            if (!response.ok) throw new Error("No se pudo descargar el archivo.");
+            return response.arrayBuffer();
+        })
+        .then(buffer => {
+            // Leer el archivo Excel con SheetJS
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            
+            // Tomar la primera pestaña del libro
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            
+            // Convertir la hoja a una matriz (array de filas)
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            processData(rows);
+            
             statusEl.textContent = "Sincronizado";
             statusEl.className = "text-xs px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium";
-        },
-        error: function(err) {
-            console.error("Error al leer el Google Sheet:", err);
+        })
+        .catch(err => {
+            console.error("Error al leer el archivo:", err);
             statusEl.textContent = "Error de conexión";
             statusEl.className = "text-xs px-3 py-1 rounded-full bg-red-100 text-red-800 font-medium";
-            document.getElementById('inventoryTableBody').innerHTML = `<tr><td colspan="4" class="text-center py-8 text-red-500">No se pudo cargar el archivo. Asegúrate de que el Google Sheet esté compartido como público ("Cualquier usuario con el enlace puede ver").</td></tr>`;
-        }
-    });
+            document.getElementById('inventoryTableBody').innerHTML = `<tr><td colspan="4" class="text-center py-8 text-red-500">No se pudo cargar el archivo. Verifica que el archivo esté compartido como "Cualquier usuario con el enlace puede ser Lector".</td></tr>`;
+        });
 }
 
 function processData(rows) {
     globalInventoryData = [];
     
     rows.forEach((row) => {
-        // Asignación basada en las columnas de tu hoja:
+        // Estructura basada en tus columnas:
         // Columna C (índice 2): Nombre
         // Columna D (índice 3): Cantidad
-        // Columna K (índice 11): Precio Total / Venta
-        // Columna L (índice 12): Restantes (Stock)
+        // Columna K (índice 10 u 11): Precio Total / Venta
+        // Columna L (índice 11 u 12): Restantes (Stock)
         const nombre = row[2];
         const cantidad = row[3];
-        const precio = row[11];
-        const restantes = row[12];
+        const precio = row[10] !== undefined ? row[10] : row[11]; 
+        const restantes = row[11] !== undefined ? row[11] : row[12];
 
-        if (nombre && nombre.trim() !== "" && nombre.toLowerCase() !== "nombre" && nombre.toLowerCase() !== "totalc") {
+        if (nombre && String(nombre).trim() !== "" && String(nombre).toLowerCase() !== "nombre" && String(nombre).toLowerCase() !== "totalc") {
             globalInventoryData.push({
-                nombre: nombre.trim(),
+                nombre: String(nombre).trim(),
                 cantidad: cantidad || "0",
-                restantes: restantes || "0",
+                restantes: restantes !== undefined ? restantes : "0",
                 precio: precio || "$0"
             });
         }
@@ -69,7 +80,7 @@ function renderTable(data) {
     tbody.innerHTML = '';
 
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400">No se encontraron registros de perfumes válidos.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400">No se encontraron registros de perfumes válidos en el archivo.</td></tr>`;
         return;
     }
 
@@ -96,7 +107,7 @@ function renderTable(data) {
     });
 }
 
-// Evento para el buscador en tiempo real
+// Buscador en tiempo real
 document.getElementById('searchInput').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const filtered = globalInventoryData.filter(item => item.nombre.toLowerCase().includes(query));
