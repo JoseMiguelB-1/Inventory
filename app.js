@@ -1,75 +1,127 @@
-// ID de tu Google Sheet / Excel en Drive
 const SPREADSHEET_ID = '1fP3PWiWY13KpIT62uLwh-DpW76Pc6t_y';
+const GID = '108359074';
 
-// URL de descarga directa compatible con archivos Excel subidos a Google Drive
-const excelUrl = `https://docs.google.com/uc?export=download&id=${SPREADSHEET_ID}`;
+const CSV_URLS = [
+    `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID}`,
+    `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`
+];
+
+// Índices de columna (base 0): A=0, B=1, C=2 ...
+const COL = {
+    ID: 1,        // B
+    NOMBRE: 2,    // C
+    CANTIDAD: 3,  // D
+    FRASCO: 8,    // I  (Frasco de lujo)
+    PRECIO_FRASCO: 9, // J (Precio Frasco)
+    RESTANTES: 11 // L
+};
+
+const PRECIO_CON_FRASCO = 57000;
+const PRECIO_SIN_FRASCO = 42000;
 
 let globalInventoryData = [];
 
 function formatCurrency(amount) {
-    const cleanNum = parseFloat(String(amount).replace(/[^0-9,.-]+/g,"").replace(',', '.')) || 0;
-    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(cleanNum);
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
 }
 
-function loadGoogleSheetData() {
+function setStatus(text, colors) {
     const statusEl = document.getElementById('statusIndicator');
-    statusEl.textContent = "Conectando...";
-    statusEl.className = "text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-medium";
-
-    // Usamos un proxy CORS alternativo y seguro para descargar el binario del Excel
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(excelUrl)}`;
-
-    fetch(proxyUrl)
-        .then(response => {
-            if (!response.ok) throw new Error("No se pudo descargar el archivo.");
-            return response.arrayBuffer();
-        })
-        .then(buffer => {
-            // Leer el archivo Excel con SheetJS
-            const workbook = XLSX.read(buffer, { type: 'array' });
-            
-            // Tomar la primera pestaña del libro
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            
-            // Convertir la hoja a una matriz (array de filas)
-            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-            
-            processData(rows);
-            
-            statusEl.textContent = "Sincronizado";
-            statusEl.className = "text-xs px-3 py-1 rounded-full bg-green-100 text-green-800 font-medium";
-        })
-        .catch(err => {
-            console.error("Error al leer el archivo:", err);
-            statusEl.textContent = "Error de conexión";
-            statusEl.className = "text-xs px-3 py-1 rounded-full bg-red-100 text-red-800 font-medium";
-            document.getElementById('inventoryTableBody').innerHTML = `<tr><td colspan="4" class="text-center py-8 text-red-500">No se pudo cargar el archivo. Verifica que el archivo esté compartido como "Cualquier usuario con el enlace puede ser Lector".</td></tr>`;
-        });
+    statusEl.textContent = text;
+    statusEl.className = `text-xs px-3 py-1 rounded-full ${colors} font-medium`;
 }
 
-function processData(rows) {
-    globalInventoryData = [];
-    
-    rows.forEach((row) => {
-        // Estructura basada en tus columnas:
-        // Columna C (índice 2): Nombre
-        // Columna D (índice 3): Cantidad
-        // Columna K (índice 10 u 11): Precio Total / Venta
-        // Columna L (índice 11 u 12): Restantes (Stock)
-        const nombre = row[2];
-        const cantidad = row[3];
-        const precio = row[10] !== undefined ? row[10] : row[11]; 
-        const restantes = row[11] !== undefined ? row[11] : row[12];
+// Parser CSV que respeta comillas (campos con comas, saltos de línea, "" escapadas)
+function parseCSV(text) {
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
 
-        if (nombre && String(nombre).trim() !== "" && String(nombre).toLowerCase() !== "nombre" && String(nombre).toLowerCase() !== "totalc") {
-            globalInventoryData.push({
-                nombre: String(nombre).trim(),
-                cantidad: cantidad || "0",
-                restantes: restantes !== undefined ? restantes : "0",
-                precio: precio || "$0"
-            });
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+
+        if (inQuotes) {
+            if (c === '"') {
+                if (text[i + 1] === '"') { field += '"'; i++; }
+                else inQuotes = false;
+            } else {
+                field += c;
+            }
+        } else if (c === '"') {
+            inQuotes = true;
+        } else if (c === ',') {
+            row.push(field); field = '';
+        } else if (c === '\n' || c === '\r') {
+            if (c === '\r' && text[i + 1] === '\n') i++;
+            row.push(field); field = '';
+            rows.push(row); row = [];
+        } else {
+            field += c;
         }
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows;
+}
+
+async function fetchCSV() {
+    let lastError;
+    for (const url of CSV_URLS) {
+        try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.text();
+        } catch (err) {
+            lastError = err;
+            console.warn('Falló', url, err);
+        }
+    }
+    throw lastError;
+}
+
+async function loadGoogleSheetData() {
+    setStatus('Conectando...', 'bg-blue-100 text-blue-800');
+    try {
+        const csvText = await fetchCSV();
+        processCSVText(csvText);
+        setStatus('Sincronizado', 'bg-green-100 text-green-800');
+    } catch (err) {
+        console.error('Fallo total de conexión:', err);
+        setStatus('Error de conexión', 'bg-red-100 text-red-800');
+        document.getElementById('inventoryTableBody').innerHTML =
+            `<tr><td colspan="5" class="text-center py-8 text-red-500">No se pudo cargar el archivo. Verifica los permisos de acceso público.</td></tr>`;
+    }
+}
+
+function cell(row, idx) {
+    return (row[idx] || '').trim();
+}
+
+function processCSVText(text) {
+    const rows = parseCSV(text);
+    globalInventoryData = [];
+
+    rows.forEach(row => {
+        const id = cell(row, COL.ID);
+        const nombre = cell(row, COL.NOMBRE);
+
+        // Solo filas de perfumes reales: ID numérico y nombre con texto
+        // (descarta encabezados, "Factura 1", "TotalC", filas vacías)
+        if (!/^\d+$/.test(id) || nombre === '') return;
+
+        const cantidad = cell(row, COL.CANTIDAD) || '0';
+        const frascoNombre = cell(row, COL.FRASCO);
+        const precioFrasco = cell(row, COL.PRECIO_FRASCO);
+
+        const tieneFrasco = frascoNombre !== '' || precioFrasco !== '';
+        const restantes = cell(row, COL.RESTANTES) || '0';
+
+        globalInventoryData.push({
+            nombre,
+            cantidad,
+            tieneFrasco,
+            frascoNombre,
+            restantes,
+            precio: tieneFrasco ? PRECIO_CON_FRASCO : PRECIO_SIN_FRASCO
+        });
     });
 
     renderTable(globalInventoryData);
@@ -80,26 +132,34 @@ function renderTable(data) {
     tbody.innerHTML = '';
 
     if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400">No se encontraron registros de perfumes válidos en el archivo.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400">No se encontraron registros de perfumes válidos.</td></tr>`;
         return;
     }
 
     data.forEach(item => {
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-gray-50";
-        
+        tr.className = 'hover:bg-gray-50';
+
         const numRestantes = parseInt(item.restantes) || 0;
-        const stockBadgeClass = numRestantes > 0 
-            ? "bg-green-100 text-green-800" 
-            : "bg-red-100 text-red-800";
+        const stockBadgeClass = numRestantes > 0
+            ? 'bg-green-100 text-green-800 font-semibold'
+            : 'bg-red-100 text-red-800 font-semibold';
+
+        const frascoBadgeClass = item.tieneFrasco
+            ? 'bg-green-100 text-green-700 font-bold'
+            : 'bg-red-100 text-red-600 font-medium';
+        const frascoTexto = item.tieneFrasco
+            ? `SÍ${item.frascoNombre ? ' · ' + item.frascoNombre : ''}`
+            : 'NO';
 
         tr.innerHTML = `
             <td class="py-3 px-6 font-medium text-gray-900">${item.nombre}</td>
             <td class="py-3 px-6 text-center text-gray-600">${item.cantidad}</td>
             <td class="py-3 px-6 text-center">
-                <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${stockBadgeClass}">
-                    ${item.restantes} disp.
-                </span>
+                <span class="px-2.5 py-1 rounded-full text-xs ${frascoBadgeClass}">${frascoTexto}</span>
+            </td>
+            <td class="py-3 px-6 text-center">
+                <span class="px-2.5 py-1 rounded-full text-xs ${stockBadgeClass}">${numRestantes} disp.</span>
             </td>
             <td class="py-3 px-6 text-right font-semibold text-indigo-600">${formatCurrency(item.precio)}</td>
         `;
@@ -107,12 +167,9 @@ function renderTable(data) {
     });
 }
 
-// Buscador en tiempo real
 document.getElementById('searchInput').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
-    const filtered = globalInventoryData.filter(item => item.nombre.toLowerCase().includes(query));
-    renderTable(filtered);
+    renderTable(globalInventoryData.filter(item => item.nombre.toLowerCase().includes(query)));
 });
 
-// Cargar datos automáticamente al iniciar
 loadGoogleSheetData();

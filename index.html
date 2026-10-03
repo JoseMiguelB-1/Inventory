@@ -6,11 +6,8 @@
     <title>Inventario de Perfumes en Vivo</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PapaParse para leer CSV -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Archivo de estilos personalizado -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen p-6">
@@ -45,12 +42,13 @@
                         <tr class="bg-gray-100 text-gray-600 text-xs font-semibold uppercase tracking-wider">
                             <th class="py-3 px-6">Perfume (Nombre)</th>
                             <th class="py-3 px-6 text-center">Cantidad</th>
+                            <th class="py-3 px-6 text-center">Frasco de Lujo</th>
                             <th class="py-3 px-6 text-center">Stock (Restantes)</th>
                             <th class="py-3 px-6 text-right">Precio de Venta</th>
                         </tr>
                     </thead>
                     <tbody id="inventoryTableBody" class="divide-y divide-gray-200 text-sm">
-                        <tr><td colspan="4" class="text-center py-8 text-gray-400">Cargando inventario desde Google Sheets...</td></tr>
+                        <tr><td colspan="5" class="text-center py-8 text-gray-400">Cargando inventario desde Google Sheets...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -61,8 +59,6 @@
         </div>
     </div>
 
-    <!-- SheetJS para leer archivos Excel nativos desde la web -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Archivo JavaScript principal -->
     <script src="app.js"></script>
 </body>
